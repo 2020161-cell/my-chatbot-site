@@ -27,7 +27,7 @@ function chunkText(text, chunkSize = 800) {
 }
 
 // ------------------------------
-// 3. Simple embedding (TextEncoder only)
+// 3. Simple embedding (TextEncoder)
 // ------------------------------
 function embed(text) {
     const encoder = new TextEncoder();
@@ -82,17 +82,17 @@ async function retrieveRelevantChunks(query) {
 }
 
 // ------------------------------
-// 6. TinyLlama LLM (Transformers.js)
+// 6. Qwen2.5‑0.5B‑Instruct LLM
 // ------------------------------
 let generator = null;
 
 async function initLLM() {
-    console.log("Loading TinyLlama model…");
+    console.log("Loading Qwen2.5-0.5B-Instruct…");
     generator = await window.transformers.pipeline(
         "text-generation",
-        "Xenova/TinyLlama-1.1B-Chat-v1.0"
+        "Xenova/Qwen2.5-0.5B-Instruct"
     );
-    console.log("TinyLlama loaded.");
+    console.log("Qwen2.5-0.5B-Instruct loaded.");
 }
 
 initLLM();
@@ -101,7 +101,7 @@ async function runLLM(prompt) {
     if (!generator) return "Model loading… please wait a few seconds and try again.";
 
     const output = await generator(prompt, {
-        max_new_tokens: 180,
+        max_new_tokens: 200,
         temperature: 0.7,
         top_p: 0.9
     });
