@@ -1,5 +1,5 @@
 // ------------------------------
-// 1. Load PDF from GitHub Pages
+// 1. Load PDF
 // ------------------------------
 async function loadPDFText(pdfUrl) {
     const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
@@ -16,7 +16,7 @@ async function loadPDFText(pdfUrl) {
 }
 
 // ------------------------------
-// 2. Chunk text for retrieval
+// 2. Chunk text
 // ------------------------------
 function chunkText(text, chunkSize = 800) {
     const chunks = [];
@@ -27,25 +27,39 @@ function chunkText(text, chunkSize = 800) {
 }
 
 // ------------------------------
-// 3. Embedding using Transformers.js
+// 3. Phi‑1.5 unified model
 // ------------------------------
-let embedder;
+let phiModel;
 
+async function initModel() {
+    phiModel = await window.transformers.pipeline(
+        "text-generation",
+        "Xenova/phi-1_5"
+    );
+    console.log("Phi‑1.5 loaded");
+}
+
+initModel();
+
+// ------------------------------
+// 4. Embedding using Phi‑1.5
+// ------------------------------
 async function embed(text) {
-    if (!embedder) {
-        embedder = await window.transformers.pipeline(
-            "feature-extraction",
-            "Xenova/distilbert-base-uncased"
-        );
-    }
+    const output = await phiModel(text, {
+        max_new_tokens: 1,
+        return_full_text: false
+    });
 
-    const output = await embedder(text, { pooling: "mean", normalize: true });
-    return output.data;
+    // Convert text to simple numeric embedding
+    const encoder = new TextEncoder();
+    const data = encoder.encode(output[0].generated_text);
+    return Array.from(data).slice(0, 256);
 }
 
 function cosineSimilarity(a, b) {
     let dot = 0, normA = 0, normB = 0;
-    for (let i = 0; i < a.length; i++) {
+    const len = Math.min(a.length, b.length);
+    for (let i = 0; i < len; i++) {
         dot += a[i] * b[i];
         normA += a[i] * a[i];
         normB += b[i] * b[i];
@@ -54,27 +68,26 @@ function cosineSimilarity(a, b) {
 }
 
 // ------------------------------
-// 4. Build knowledge base
+// 5. Build knowledge base
 // ------------------------------
 let knowledgeChunks = [];
 let knowledgeEmbeddings = [];
 
 async function initKnowledgeBase() {
-    const pdfFile = "e_budget_speech-2026-27.pdf";
-    const pdfText = await loadPDFText(pdfFile);
+    const pdfText = await loadPDFText("e_budget_speech-2026-27.pdf");
     knowledgeChunks = chunkText(pdfText);
 
     for (const chunk of knowledgeChunks) {
         knowledgeEmbeddings.push(await embed(chunk));
     }
 
-    console.log("Knowledge base loaded:", knowledgeChunks.length, "chunks");
+    console.log("Knowledge base ready:", knowledgeChunks.length, "chunks");
 }
 
 initKnowledgeBase();
 
 // ------------------------------
-// 5. Retrieve relevant chunks
+// 6. Retrieve relevant chunks
 // ------------------------------
 async function retrieveRelevantChunks(query) {
     const queryEmbedding = await embed(query);
@@ -90,24 +103,13 @@ async function retrieveRelevantChunks(query) {
 }
 
 // ------------------------------
-// 6. LLM using Transformers.js
+// 7. Generate answer using Phi‑1.5
 // ------------------------------
-let generator;
+async function runLLM(prompt) {
+    if (!phiModel) return "Model loading… please wait.";
 
-async function initLLM() {
-    generator = await window.transformers.pipeline(
-        "text-generation",
-        "Xenova/gpt2"
-    );
-}
-
-initLLM();
-
-async function runLocalLLM(prompt) {
-    if (!generator) return "Model loading… please wait.";
-
-    const output = await generator(prompt, {
-        max_new_tokens: 150,
+    const output = await phiModel(prompt, {
+        max_new_tokens: 180,
         temperature: 0.7,
         top_p: 0.9
     });
@@ -116,14 +118,14 @@ async function runLocalLLM(prompt) {
 }
 
 // ------------------------------
-// 7. Chat interaction
+// 8. Chat interaction
 // ------------------------------
 async function answerUser(query) {
     const context = await retrieveRelevantChunks(query);
 
     const prompt = `
 Use the following knowledge to answer the user's question.
-If the answer is not clearly supported by the knowledge, say you are not sure.
+If the answer is not in the knowledge, say you are not sure.
 
 Knowledge:
 ${context.join("\n\n")}
@@ -133,7 +135,7 @@ User question: ${query}
 Answer:
 `;
 
-    return runLocalLLM(prompt);
+    return runLLM(prompt);
 }
 
 async function sendMessage() {
