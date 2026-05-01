@@ -27,32 +27,11 @@ function chunkText(text, chunkSize = 800) {
 }
 
 // ------------------------------
-// 3. Phi‑1.5 unified model
+// 3. Simple embedding (TextEncoder only)
 // ------------------------------
-let phiModel;
-
-async function initModel() {
-    phiModel = await window.transformers.pipeline(
-        "text-generation",
-        "Xenova/phi-1_5"
-    );
-    console.log("Phi‑1.5 loaded");
-}
-
-initModel();
-
-// ------------------------------
-// 4. Embedding using Phi‑1.5
-// ------------------------------
-async function embed(text) {
-    const output = await phiModel(text, {
-        max_new_tokens: 1,
-        return_full_text: false
-    });
-
-    // Convert text to simple numeric embedding
+function embed(text) {
     const encoder = new TextEncoder();
-    const data = encoder.encode(output[0].generated_text);
+    const data = encoder.encode(text);
     return Array.from(data).slice(0, 256);
 }
 
@@ -64,11 +43,11 @@ function cosineSimilarity(a, b) {
         normA += a[i] * a[i];
         normB += b[i] * b[i];
     }
-    return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+    return dot / (Math.sqrt(normA) * Math.sqrt(normB) || 1);
 }
 
 // ------------------------------
-// 5. Build knowledge base
+// 4. Build knowledge base
 // ------------------------------
 let knowledgeChunks = [];
 let knowledgeEmbeddings = [];
@@ -78,7 +57,7 @@ async function initKnowledgeBase() {
     knowledgeChunks = chunkText(pdfText);
 
     for (const chunk of knowledgeChunks) {
-        knowledgeEmbeddings.push(await embed(chunk));
+        knowledgeEmbeddings.push(embed(chunk));
     }
 
     console.log("Knowledge base ready:", knowledgeChunks.length, "chunks");
@@ -87,10 +66,10 @@ async function initKnowledgeBase() {
 initKnowledgeBase();
 
 // ------------------------------
-// 6. Retrieve relevant chunks
+// 5. Retrieve relevant chunks
 // ------------------------------
 async function retrieveRelevantChunks(query) {
-    const queryEmbedding = await embed(query);
+    const queryEmbedding = embed(query);
 
     const scored = knowledgeEmbeddings.map((emb, i) => ({
         chunk: knowledgeChunks[i],
@@ -103,12 +82,25 @@ async function retrieveRelevantChunks(query) {
 }
 
 // ------------------------------
-// 7. Generate answer using Phi‑1.5
+// 6. TinyLlama LLM (Transformers.js)
 // ------------------------------
-async function runLLM(prompt) {
-    if (!phiModel) return "Model loading… please wait.";
+let generator = null;
 
-    const output = await phiModel(prompt, {
+async function initLLM() {
+    console.log("Loading TinyLlama model…");
+    generator = await window.transformers.pipeline(
+        "text-generation",
+        "Xenova/TinyLlama-1.1B-Chat-v1.0"
+    );
+    console.log("TinyLlama loaded.");
+}
+
+initLLM();
+
+async function runLLM(prompt) {
+    if (!generator) return "Model loading… please wait a few seconds and try again.";
+
+    const output = await generator(prompt, {
         max_new_tokens: 180,
         temperature: 0.7,
         top_p: 0.9
@@ -118,14 +110,14 @@ async function runLLM(prompt) {
 }
 
 // ------------------------------
-// 8. Chat interaction
+// 7. Chat interaction
 // ------------------------------
 async function answerUser(query) {
     const context = await retrieveRelevantChunks(query);
 
     const prompt = `
-Use the following knowledge to answer the user's question.
-If the answer is not in the knowledge, say you are not sure.
+You are a helpful assistant answering questions about the Hong Kong Budget 2026–27.
+Use only the knowledge below. If the answer is not clearly supported, say you are not sure.
 
 Knowledge:
 ${context.join("\n\n")}
