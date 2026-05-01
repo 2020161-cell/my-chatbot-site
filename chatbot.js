@@ -37,7 +37,8 @@ async function embed(text) {
 
 function cosineSimilarity(a, b) {
     let dot = 0, normA = 0, normB = 0;
-    for (let i = 0; i < a.length; i++) {
+    const len = Math.min(a.length, b.length);
+    for (let i = 0; i < len; i++) {
         dot += a[i] * b[i];
         normA += a[i] * a[i];
         normB += b[i] * b[i];
@@ -82,11 +83,63 @@ async function retrieveRelevantChunks(query) {
 }
 
 // ------------------------------
-// 6. Simple local LLM stub
-// Replace with WebLLM / Transformers.js if needed
+// 6. WebLLM integration
 // ------------------------------
+let webllmEngine = null;
+let webllmReady = false;
+let webllmLoadingError = null;
+
+async function initLLM() {
+    try {
+        // WebLLM is exposed as global "webllm" when you include its script in index.html
+        // Example model: Llama-3.2-1B-Instruct-q4f32_1-MLC
+        webllmEngine = await webllm.CreateMLCEngine(
+            "Llama-3.2-1B-Instruct-q4f32_1-MLC",
+            {
+                // optional config
+                temperature: 0.2,
+                top_p: 0.9
+            }
+        );
+        webllmReady = true;
+        console.log("WebLLM model loaded.");
+    } catch (err) {
+        console.error("Error loading WebLLM:", err);
+        webllmLoadingError = err;
+    }
+}
+
+// kick off model loading
+initLLM();
+
 async function runLocalLLM(prompt) {
-    return "This is a placeholder response. Add WebLLM or Transformers.js for real LLM output.\n\nPrompt used:\n" + prompt;
+    if (webllmLoadingError) {
+        return "LLM failed to load. Please refresh the page or try again later.";
+    }
+    if (!webllmReady || !webllmEngine) {
+        return "Model is still loading… please wait a few seconds and ask again.";
+    }
+
+    const result = await webllmEngine.chat.completions.create({
+        messages: [
+            {
+                role: "system",
+                content: "You are a helpful assistant answering questions about the Hong Kong Budget 2026–27. Use only the provided context; if the answer is not in the context, say you are not sure."
+            },
+            {
+                role: "user",
+                content: prompt
+            }
+        ],
+        max_tokens: 256
+    });
+
+    const choice = result.choices && result.choices[0];
+    if (!choice || !choice.message || !choice.message.content) {
+        return "I could not generate a response. Please try again.";
+    }
+
+    return choice.message.content;
 }
 
 // ------------------------------
@@ -96,8 +149,10 @@ async function answerUser(query) {
     const context = await retrieveRelevantChunks(query);
 
     const prompt = `
-Use the following knowledge to answer:
+Use the following knowledge to answer the user's question. 
+If the answer is not clearly supported by the knowledge, say you are not sure.
 
+Knowledge:
 ${context.join("\n\n")}
 
 User question: ${query}
