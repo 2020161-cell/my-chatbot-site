@@ -32,7 +32,7 @@ function chunkText(text, chunkSize = 800) {
 async function embed(text) {
     const encoder = new TextEncoder();
     const data = encoder.encode(text);
-    return data.slice(0, 256); // simple local embedding
+    return data.slice(0, 256);
 }
 
 function cosineSimilarity(a, b) {
@@ -83,48 +83,48 @@ async function retrieveRelevantChunks(query) {
 }
 
 // ------------------------------
-// 6. WebLLM integration
+// 6. WebLLM Integration (working model)
 // ------------------------------
 let webllmEngine = null;
 let webllmReady = false;
-let webllmLoadingError = null;
+let webllmError = null;
 
 async function initLLM() {
     try {
-        // WebLLM is exposed as global "webllm" when you include its script in index.html
-        // Example model: Llama-3.2-1B-Instruct-q4f32_1-MLC
-        webllmEngine = await webllm.CreateMLCEngine(
-            "Llama-3.2-1B-Instruct-q4f32_1-MLC",
-            {
-                // optional config
-                temperature: 0.2,
-                top_p: 0.9
-            }
-        );
+        console.log("Loading WebLLM model…");
+
+        // ⭐ This model loads successfully from CDN
+        const modelName = "Phi-3.5-mini-instruct-q4f16_1-MLC";
+
+        webllmEngine = await webllm.CreateMLCEngine(modelName, {
+            temperature: 0.2,
+            top_p: 0.9
+        });
+
         webllmReady = true;
-        console.log("WebLLM model loaded.");
+        console.log("WebLLM model loaded successfully.");
     } catch (err) {
-        console.error("Error loading WebLLM:", err);
-        webllmLoadingError = err;
+        console.error("WebLLM failed to load:", err);
+        webllmError = err;
     }
 }
 
-// kick off model loading
 initLLM();
 
 async function runLocalLLM(prompt) {
-    if (webllmLoadingError) {
+    if (webllmError) {
         return "LLM failed to load. Please refresh the page or try again later.";
     }
     if (!webllmReady || !webllmEngine) {
-        return "Model is still loading… please wait a few seconds and ask again.";
+        return "Model is still loading… please wait a few seconds.";
     }
 
     const result = await webllmEngine.chat.completions.create({
         messages: [
             {
                 role: "system",
-                content: "You are a helpful assistant answering questions about the Hong Kong Budget 2026–27. Use only the provided context; if the answer is not in the context, say you are not sure."
+                content:
+                    "You are a helpful assistant answering questions about the Hong Kong Budget 2026–27. Use only the provided context. If the answer is not in the context, say you are not sure."
             },
             {
                 role: "user",
@@ -134,12 +134,8 @@ async function runLocalLLM(prompt) {
         max_tokens: 256
     });
 
-    const choice = result.choices && result.choices[0];
-    if (!choice || !choice.message || !choice.message.content) {
-        return "I could not generate a response. Please try again.";
-    }
-
-    return choice.message.content;
+    const choice = result.choices?.[0]?.message?.content;
+    return choice || "I could not generate a response. Please try again.";
 }
 
 // ------------------------------
@@ -149,7 +145,7 @@ async function answerUser(query) {
     const context = await retrieveRelevantChunks(query);
 
     const prompt = `
-Use the following knowledge to answer the user's question. 
+Use the following knowledge to answer the user's question.
 If the answer is not clearly supported by the knowledge, say you are not sure.
 
 Knowledge:

@@ -1,30 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Knowledge Chatbot</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <title>Knowledge Chatbot</title>
+    <link rel="stylesheet" href="style.css">
 </head>
-<script src="https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/dist/web-llm.min.js"></script>
 
 <body>
-  <h1>Knowledge Chatbot</h1>
+    <h1>Knowledge Chatbot</h1>
 
-  <div id="chatbox"></div>
+    <!-- Chat Window -->
+    <div id="chatbox"></div>
 
-  <div id="input-area">
-    <input id="userInput" type="text" placeholder="Ask me anything..." />
-    <button onclick="sendMessage()">Send</button>
-  </div>
+    <!-- Input Area -->
+    <div id="input-area">
+        <input id="userInput" type="text" placeholder="Ask me anything..." />
+        <button onclick="sendMessage()">Send</button>
+    </div>
 
-  <!-- PDF.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+    <!-- PDF.js (required for reading your PDF knowledge file) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/dist/web-llm.min.js"></script>
-  <script src="chatbot.js"></script>
+    <!-- WebLLM (required for running the LLM in browser) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/dist/web-llm.min.js"></script>
 
-  <!-- Your chatbot logic -->
-  <script src="chatbot.js"></script>
+    <!-- Your chatbot logic -->
+    <script src="chatbot.js"></script>
 </body>
 </html>
