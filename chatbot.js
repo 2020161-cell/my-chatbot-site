@@ -27,18 +27,25 @@ function chunkText(text, chunkSize = 800) {
 }
 
 // ------------------------------
-// 3. Simple embedding (browser-only)
+// 3. Embedding using Transformers.js
 // ------------------------------
+let embedder;
+
 async function embed(text) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(text);
-    return data.slice(0, 256);
+    if (!embedder) {
+        embedder = await window.transformers.pipeline(
+            "feature-extraction",
+            "Xenova/distilbert-base-uncased"
+        );
+    }
+
+    const output = await embedder(text, { pooling: "mean", normalize: true });
+    return output.data;
 }
 
 function cosineSimilarity(a, b) {
     let dot = 0, normA = 0, normB = 0;
-    const len = Math.min(a.length, b.length);
-    for (let i = 0; i < len; i++) {
+    for (let i = 0; i < a.length; i++) {
         dot += a[i] * b[i];
         normA += a[i] * a[i];
         normB += b[i] * b[i];
@@ -83,59 +90,29 @@ async function retrieveRelevantChunks(query) {
 }
 
 // ------------------------------
-// 6. WebLLM Integration (working model)
+// 6. LLM using Transformers.js
 // ------------------------------
-let webllmEngine = null;
-let webllmReady = false;
-let webllmError = null;
+let generator;
 
 async function initLLM() {
-    try {
-        console.log("Loading WebLLM model…");
-
-        // ⭐ This model loads successfully from CDN
-        const modelName = "Phi-3.5-mini-instruct-q4f16_1-MLC";
-
-        webllmEngine = await webllm.CreateMLCEngine(modelName, {
-            temperature: 0.2,
-            top_p: 0.9
-        });
-
-        webllmReady = true;
-        console.log("WebLLM model loaded successfully.");
-    } catch (err) {
-        console.error("WebLLM failed to load:", err);
-        webllmError = err;
-    }
+    generator = await window.transformers.pipeline(
+        "text-generation",
+        "Xenova/gpt2"
+    );
 }
 
 initLLM();
 
 async function runLocalLLM(prompt) {
-    if (webllmError) {
-        return "LLM failed to load. Please refresh the page or try again later.";
-    }
-    if (!webllmReady || !webllmEngine) {
-        return "Model is still loading… please wait a few seconds.";
-    }
+    if (!generator) return "Model loading… please wait.";
 
-    const result = await webllmEngine.chat.completions.create({
-        messages: [
-            {
-                role: "system",
-                content:
-                    "You are a helpful assistant answering questions about the Hong Kong Budget 2026–27. Use only the provided context. If the answer is not in the context, say you are not sure."
-            },
-            {
-                role: "user",
-                content: prompt
-            }
-        ],
-        max_tokens: 256
+    const output = await generator(prompt, {
+        max_new_tokens: 150,
+        temperature: 0.7,
+        top_p: 0.9
     });
 
-    const choice = result.choices?.[0]?.message?.content;
-    return choice || "I could not generate a response. Please try again.";
+    return output[0].generated_text;
 }
 
 // ------------------------------
@@ -152,6 +129,8 @@ Knowledge:
 ${context.join("\n\n")}
 
 User question: ${query}
+
+Answer:
 `;
 
     return runLocalLLM(prompt);
